@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+CONTAINER_NAME=dockerpi-test
+SSH_PORT=5023
+
+docker run -d --rm -p "${SSH_PORT}:5022" --name "${CONTAINER_NAME}" clutroth/dockerpi:latest
+docker logs -f "${CONTAINER_NAME}" &
+
+sleep 4m && sshpass -p raspberry ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no pi@localhost -p "${SSH_PORT}" id || exit 1
+
+docker kill "${CONTAINER_NAME}"

@@ -1,0 +1,7 @@
+---
+- name: 'Provision Image'
+  hosts: all
+  become: true
+  roles:
+    - common
+
