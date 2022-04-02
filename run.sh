@@ -7,10 +7,12 @@ IMG_PATH="$HOME/dockerpi3_image"
 FILENAME=$(basename $IMG_URL)
 NAME=$(basename $IMG_URL .zip)
 FILEPATH="${IMG_PATH}/${NAME}.img"
-IMG_RESIZE="4G"
-BOOTSTART=`fdisk -l "$FILEPATH" | sed -nr "s/^\S+1\s+([0-9]+).*  c W95 FAT32 \(LBA\)$/\1/p"`
+IMG_RESIZE="8G"
+PROCESSORS="4" 
 
-! [ –d "${IMG_PATH}" ] && mkdir -p ${IMG_PATH} 
+if [ ! -d "${IMGPATH}" ]; then
+  mkdir -p ${IMG_PATH}
+fi
 
 if  [ ! -f "${IMG_PATH}/${FILENAME}" ] 
   then 
@@ -22,29 +24,36 @@ if [ ! -f "${IMG_PATH}/${NAME}.img" ]
     unzip -q "${IMG_PATH}/${FILENAME}" -d "${IMG_PATH}" 
     qemu-img resize -f raw "${FILEPATH}" "${IMG_RESIZE}" 
 
-   # Find the first, DOS partition and mount it
-   if [[ -z "$BOOTSTART" ]]; then
-     echo "Can't find FAT32 first partition in image \"$FILEPATH\""
-     exit
-   fi
+    # Find the first, DOS partition and mount it
+    BOOTSTART=`fdisk -l "${FILEPATH}" | sed -nr "s/^\S+1\s+([0-9]+).*  c W95 FAT32 \(LBA\)$/\1/p"`
 
-  sudo losetup /dev/loop10 "$FILEPATH" -o $((BOOTSTART*512))
-  sudo mkdir rpi-boot
-  sudo mount /dev/loop10 rpi-boot
+    if [[ -z "${BOOTSTART}" ]]; then
+      echo "Can't find FAT32 first partition in image \"{$FILEPATH}\""
+      exit
+    fi
 
-# Make the change
-   if [[ -e "rpi-boot/ssh" ]]; then
-     echo "\"`basename "$FILEPATH"`\" ALREADY had boot/ssh set."
-   else
-     sudo touch rpi-boot/ssh
-     echo "\"`basename "$FILEPATH"`\" now has boot/ssh set."
-  fi
+    sudo losetup /dev/loop100 "${FILEPATH}" -o $((BOOTSTART*512))
+    sudo mkdir rpi-boot
+    sudo mount /dev/loop100 rpi-boot
+
+    # Make the change
+    if [[ -e "rpi-boot/ssh" ]]; then
+      echo "\"`basename "${FILEPATH}"`\" ALREADY had boot/ssh set."
+    else
+      sudo touch rpi-boot/ssh
+      echo "\"`basename "${FILEPATH}"`\" now has boot/ssh set."
+    fi
+
+    # Unmount and clear up
+    sudo umount rpi-boot
+    sudo rmdir rpi-boot
+    sudo losetup -d /dev/loop100		
 fi 
 
 # Start dockerpi3 
 docker run -p 5022:22 --rm -v "${IMG_PATH}/${NAME}.img":/sd.img  \
   --name rpi -it clutroth/dockerpi:vmlatest \
-  -m 1024 -smp 4 -M raspi3 \
+  -m 1024 -smp ${PROCESSORS} -M raspi3 \
   -kernel kernel8.img -dtb bcm2710-rpi-3-b-plus.dtb -sd /sd.img \
   -append "console=ttyAMA0 root=/dev/mmcblk0p2 rw rootwait rootfstype=ext4" \
   -nographic \
